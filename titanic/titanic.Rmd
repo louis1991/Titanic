@@ -1,0 +1,84 @@
+---
+title: "Titanic"
+author: "Louis"
+date: "May 29, 2015"
+output: html_document
+---
+
+## predict Survival on the Titanic
+This is an markdown file about Titanic. <http://www.kaggle.com>
+First,let us know something about the dataset:
+```{r}
+train <- read.csv("train.csv")
+str(train)
+```
+
+
+下面，我们通过不同的方法对数据集进行建模和预测。 ## logistic model ## 第一步，以 Survival作为因变量，通过将某些变量进行处理，其他变量以及作为自变量建立logit模型，结果显示只有“Pclass”,“sex”,“age”,“SibSp” 这4个变量有意义。 因此，重新选取这些变量建立logit模型，并计算样本内预测效果。
+```{r}
+train <- read.csv("train.csv")
+train <- na.omit(train)
+train$sex[train$Sex== "female"] <- 0
+train$sex[train$Sex== "male"] <- 1
+train <- within(train,{age <- c()
+              age[Age <= 10] = 0
+              age[Age >10 & Age<=20] =1
+              age[Age >20 & Age<=30] =2
+              age[Age >30 & Age<=40] =3
+              age[Age >40 & Age<=50] =4
+              age[Age >50 & Age<=60] =5
+              age[Age >60 & Age<=70] =6
+              age[Age >70 & Age<=80] =7})
+model1 <- glm(Survived ~ Pclass+sex+age+SibSp+Parch+Fare+Embarked,
+              data=train,family=binomial)
+train1 <- train[,c("Survived", "Pclass","sex","age","SibSp")]
+model2 <- glm(Survived ~ Pclass +sex+age+SibSp ,data=train1,family=binomial)
+summary(model2)
+predict<- predict(model2,train1)
+predict<-ifelse(predict>=0.5,1,0)
+table(train$Survived,predict)
+mean(train$Survived == predict)
+```
+
+## knn
+
+通过选择“Pclass”,“sex”,“age”,“SibSp”四个变量，用最近岭分类的方法建立模型，同时选取80%的数据作为训练集，另外的20%作为测试集并计算预测效果。
+
+```{r}
+library(caret)
+train2 <- train[,c("Survived","Pclass","sex","age","SibSp")]
+index = sample(c(1:2),nrow(train2),replace =T ,prob = c(0.8,0.2))
+train <- train2[index==1,]
+test <- train2[index==2,]
+fit <- knn3(Survived ~ .,data=train)
+pre <- predict(fit,test,type="prob")
+pre <- ifelse(pre>=0.5,1,0)
+pre <- as.data.frame(pre)
+pre$s[pre[,1]==1]=0
+pre$s[pre[,1]==0]=1
+table(test$Survived,pre$s)
+mean(test$Survived==pre$s)
+```
+
+
+## svm
+
+类似的，运用支持向量机的方法，并通过cross-validation（这里k=5）的方法，得到模型的平均预测效果。
+
+```{r}
+library(e1071)
+n=5
+train2 = train2[sample(nrow(train2)),]
+index <- sample(c(1,2,3,4,5),replace=T,size=nrow(train2))
+ratio=c()
+for(i in 1:5){
+    train = train2[!(index==i),]
+    test = train2[index==i,]
+    fit3 = svm(Survived~.,train)
+    pre <- predict(fit3,test,type="prob")
+    pre <- ifelse(pre>=0.5,1,0)
+    table(test$Survived,pre)
+    ratio[i]= mean(pre==test$Survived)
+}
+mean(ratio)
+```
